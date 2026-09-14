@@ -69,6 +69,16 @@ check_prerequisites() {
     log_status "running" "validating" "Note: Existing Red Hat OpenShift AI installation detected. The installer will manage this."
   fi
 
+  # ---- Cluster-wide authentication impact awareness ----
+  # Installation registers a cluster-wide OpenID identity provider and grants the
+  # Keycloak "admin" user cluster-admin. If the only admin path becomes this
+  # quickstart's SSO admin, an interrupted install or a later uninstall can lock
+  # everyone out. Surface this and check for a break-glass credential.
+  log_status "running" "validating" "NOTE: Installation modifies CLUSTER-WIDE authentication (adds an OpenID identity provider and grants the Keycloak 'admin' user cluster-admin). Retain an independent admin credential (kubeadmin password or admin kubeconfig) before installing."
+  if ! oc get secret kubeadmin -n kube-system >/dev/null 2>&1; then
+    log_status "running" "validating" "WARNING: kubeadmin secret is absent. If you do not hold an independent admin kubeconfig, an interrupted install could permanently lock you out. Installation will require ACKNOWLEDGE_NO_BREAKGLASS=true to proceed."
+  fi
+
   # ---- Evaluate results ----
   if [[ ${#missing[@]} -gt 0 ]]; then
     local missing_json

@@ -789,6 +789,10 @@
           "enum": ["string", "boolean", "integer", "password"],
           "description": "Parameter data type."
         },
+        "envVar": {
+          "type": "string",
+          "description": "Name of the environment variable the installer expects this parameter's value in (e.g., 'ADMIN_PASSWORD'). If omitted, the operator derives it as 'PARAM_' + the parameter name uppercased with each run of non-alphanumeric characters replaced by a single underscore (e.g., 'ollama.gpu.enabled' becomes 'PARAM_OLLAMA_GPU_ENABLED')."
+        },
         "required": {
           "type": "boolean",
           "description": "Whether this parameter must be provided."

@@ -242,13 +242,33 @@ case "${1:-}" in
           value: \"${USER_PASSWORD}\"
         - name: REMOVE_KUBE_ADMIN
           value: \"${REMOVE_KUBE_ADMIN}\""
+
+    # Install refuses to mutate cluster-wide auth when no break-glass admin is
+    # found, unless the operator explicitly acknowledges the risk. Pass the
+    # acknowledgement through from the caller's environment when set.
+    if [[ "${ACKNOWLEDGE_NO_BREAKGLASS:-}" == "true" ]]; then
+      INSTALL_ENV="${INSTALL_ENV}
+        - name: ACKNOWLEDGE_NO_BREAKGLASS
+          value: \"true\""
+    fi
+
     deploy_job "INSTALL" "$NAMESPACE" "$INSTALL_ENV"
     ;;
 
   uninstall_delete_all)
     NAMESPACE="${2:-${NAMESPACE:-}}"
     [[ -z "$NAMESPACE" ]] && error "Namespace required. Usage: ./deploy.sh uninstall_delete_all <namespace>"
-    deploy_job "UNINSTALL_DELETE_ALL" "$NAMESPACE" ""
+
+    # Uninstall skips tearing down the SSO admin path when kubeadmin is absent
+    # (to avoid locking everyone out), unless the operator forces it. Pass the
+    # override through from the caller's environment when set.
+    UNINSTALL_ENV=""
+    if [[ "${FORCE_AUTH_REMOVAL:-}" == "true" ]]; then
+      UNINSTALL_ENV="        - name: FORCE_AUTH_REMOVAL
+          value: \"true\""
+    fi
+
+    deploy_job "UNINSTALL_DELETE_ALL" "$NAMESPACE" "$UNINSTALL_ENV"
     ;;
 
   "")

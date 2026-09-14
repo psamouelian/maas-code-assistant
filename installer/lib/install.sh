@@ -3,8 +3,34 @@
 # MaaS Code Assistant — Installation
 # ============================================================================
 
+# ---- Break-glass safety check ----
+# This install adds a cluster-wide OpenID identity provider and grants the
+# Keycloak "admin" user cluster-admin. If the install is interrupted before that
+# path is fully wired — or a later uninstall removes it — the ONLY way back in is
+# an admin credential that does not depend on this quickstart. Refuse to mutate
+# cluster auth unless such a credential plausibly exists, or the operator
+# explicitly acknowledges the risk.
+check_break_glass() {
+  log_status "running" "validating" "Checking for an independent break-glass cluster-admin credential..."
+
+  if oc get secret kubeadmin -n kube-system >/dev/null 2>&1; then
+    log_status "running" "validating" "kubeadmin is present. IMPORTANT: verify you can actually log in with the kubeadmin password or an independent admin kubeconfig BEFORE continuing. This install adds a cluster-wide identity provider and grants the Keycloak 'admin' user cluster-admin — the SSO admin is NOT a recovery path if the install is interrupted."
+    return 0
+  fi
+
+  if [[ "${ACKNOWLEDGE_NO_BREAKGLASS:-false}" == "true" ]]; then
+    log_status "running" "validating" "WARNING: kubeadmin is absent, but ACKNOWLEDGE_NO_BREAKGLASS=true was set. Proceeding — ensure you hold an independent admin kubeconfig."
+    return 0
+  fi
+
+  log_error "kubeadmin is absent and no break-glass was acknowledged. This install modifies cluster-wide authentication; an interruption could permanently lock you out. Retain a working admin kubeconfig and set ACKNOWLEDGE_NO_BREAKGLASS=true to proceed anyway."
+}
+
 deploy_quickstart() {
   local target_ns="${TARGET_NAMESPACE}"
+
+  # ---- Guard against catastrophic auth lockout before touching the cluster ----
+  check_break_glass
 
   # ---- Detect cluster environment ----
   log_status "running" "deploying" "Detecting cluster environment..."
@@ -51,9 +77,18 @@ deploy_quickstart() {
     monitoring_enabled="false"
   fi
 
-  # Generate Keycloak client secret
+  # Reuse the existing Keycloak OIDC client secret on upgrade/reinstall.
+  # Regenerating it desyncs the cluster OAuth (which references the
+  # openid-client-secret) from the Keycloak client. If a reinstall is
+  # interrupted after the secret rotates but before both sides agree, SSO login
+  # breaks with no fallback — one of the ways the original lockout happened.
   local keycloak_client_secret
-  keycloak_client_secret=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c32)
+  keycloak_client_secret=$(oc get secret openid-client-secret -n openshift-config -o jsonpath='{.data.clientSecret}' 2>/dev/null | base64 -d 2>/dev/null || echo "")
+  if [[ -n "$keycloak_client_secret" ]]; then
+    log_status "running" "deploying" "Reusing existing Keycloak OIDC client secret to avoid desyncing cluster OAuth"
+  else
+    keycloak_client_secret=$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c32)
+  fi
 
   # ---- Detect GPU taint keys ----
   log_status "running" "deploying" "Detecting GPU node taints..."

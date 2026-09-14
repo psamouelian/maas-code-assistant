@@ -283,11 +283,28 @@ parameters:
   configuration:
     - name: "remove.kubeadmin"
       displayName: "Remove kubeadmin User"
-      description: "Whether to remove the built-in kubeadmin user after Keycloak SSO is configured. Simplifies login but removes fallback access."
+      description: "Whether to remove the built-in kubeadmin user after Keycloak SSO is configured. Simplifies login but removes the last fallback access. The installer will still refuse to delete kubeadmin unless it can first verify the Keycloak SSO admin path is fully healthy (identity provider registered, cluster-admin binding present, Keycloak Ready, realm imported)."
       type: "boolean"
       required: false
       default: false
-      llmGuidance: "Ask the user if they want to remove the kubeadmin user. Warn that this removes fallback access — they should only do this if they are confident the Keycloak SSO configuration is correct. Default to false (keep kubeadmin)."
+      envVar: "REMOVE_KUBE_ADMIN"
+      llmGuidance: "Ask the user if they want to remove the kubeadmin user. Warn STRONGLY that this removes the last fallback access — they should only do this if they have independently verified they can log in via Keycloak SSO as a cluster-admin. Default to false (keep kubeadmin)."
+    - name: "acknowledge.noBreakGlass"
+      displayName: "Acknowledge No Break-Glass Admin"
+      description: "Installation modifies CLUSTER-WIDE authentication (registers an OpenID identity provider and grants the Keycloak 'admin' user cluster-admin). If no independent admin credential (kubeadmin secret) is detected, the installer refuses to proceed. Set this to true ONLY if you hold a working admin kubeconfig independent of this quickstart."
+      type: "boolean"
+      required: false
+      default: false
+      envVar: "ACKNOWLEDGE_NO_BREAKGLASS"
+      llmGuidance: "Do NOT set this automatically. If the installer reports no break-glass admin, stop and confirm with the user that they possess a working admin kubeconfig independent of this quickstart before setting this to true. An interrupted install without break-glass access can permanently lock the user out of the cluster."
+    - name: "force.authRemoval"
+      displayName: "Force Auth Teardown on Uninstall"
+      description: "Uninstall (delete-all) skips removing the SSO admin path (identity provider, cluster-admin binding, identities) when kubeadmin is absent, to avoid locking everyone out. Set this to true to force auth teardown anyway — only when you hold an independent admin credential."
+      type: "boolean"
+      required: false
+      default: false
+      envVar: "FORCE_AUTH_REMOVAL"
+      llmGuidance: "Do NOT set this automatically. Only pass FORCE_AUTH_REMOVAL=true during uninstall if the user confirms they hold an independent admin kubeconfig. Otherwise the uninstall safely preserves the SSO login path."
 
 access:
   endpoints:
@@ -337,6 +354,15 @@ cleanup:
     and monitoring configuration. Operator subscriptions, databases (keycloak, maas-db), and
     operator namespaces are preserved — other applications may depend on them. To fully remove
     operators, follow their documented uninstall procedures separately.
+
+    CLUSTER ACCESS WARNING: This quickstart modifies cluster-wide authentication. Install
+    registers an OpenID identity provider and grants the Keycloak "admin" user cluster-admin;
+    uninstall removes that path. Before installing OR uninstalling, ensure you can log in with an
+    admin credential that does NOT depend on this quickstart (the kubeadmin password or an admin
+    kubeconfig). If the Keycloak SSO admin is your only access, an interrupted install or an
+    uninstall can lock you out of the cluster permanently. The installer guards against this:
+    install refuses to proceed without a break-glass admin unless ACKNOWLEDGE_NO_BREAKGLASS=true,
+    and uninstall preserves the SSO admin path when kubeadmin is absent unless FORCE_AUTH_REMOVAL=true.
 
 documentation:
   readme: "https://github.com/rh-ai-quickstart/maas-code-assistant/blob/main/README.md"

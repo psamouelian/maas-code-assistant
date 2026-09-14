@@ -58,34 +58,54 @@ cleanup_quickstart() {
 
     # ---- Clean up cluster-scoped resources ----
     log_status "running" "uninstalling" "Cleaning up cluster-scoped resources..."
-    oc delete clusterrolebinding keycloak-cluster-admins 2>/dev/null || true
 
     # Remove monitoring config if we created it
     oc delete configmap cluster-monitoring-config -n openshift-monitoring 2>/dev/null || true
     oc delete configmap user-workload-monitoring-config -n openshift-user-workload-monitoring 2>/dev/null || true
-
-    # Remove OAuth integration and stale identity mappings
-    log_status "running" "uninstalling" "Removing OAuth configuration..."
-    oc get oauth cluster -o json 2>/dev/null | \
-      jq 'del(.spec.identityProviders[] | select(.name == "rhbk"))' 2>/dev/null | \
-      oc apply -f - 2>/dev/null || true
-    oc delete secret openid-client-secret -n openshift-config 2>/dev/null || true
     oc delete configmap router-ca -n openshift-config 2>/dev/null || true
 
-    # Remove rhbk identity mappings so a reinstall with new Keycloak UUIDs
-    # won't hit "cannot be claimed by identity" errors
-    local rhbk_identities
-    rhbk_identities=$(oc get identities -o name 2>/dev/null | { grep "rhbk:" || true; })
-    if [[ -n "$rhbk_identities" ]]; then
-      log_status "running" "uninstalling" "Removing stale Keycloak identity mappings..."
-      for identity in $rhbk_identities; do
-        local mapped_user
-        mapped_user=$(oc get "$identity" -o jsonpath='{.user.name}' 2>/dev/null || echo "")
-        oc delete "$identity" 2>/dev/null || true
-        if [[ -n "$mapped_user" ]]; then
-          oc delete user "$mapped_user" 2>/dev/null || true
-        fi
-      done
+    # ---- Auth teardown — guarded against self-lockout ----
+    # Removing the rhbk identity provider, the keycloak-cluster-admins binding,
+    # and the rhbk identities strips the SSO admin login path. If nobody holds an
+    # independent admin credential, doing this locks EVERYONE out of the cluster
+    # permanently (exactly the failure that motivated these guards). Only tear
+    # down auth when kubeadmin still exists as a fallback, or the operator has
+    # explicitly accepted the risk with FORCE_AUTH_REMOVAL=true.
+    local has_breakglass="false"
+    if oc get secret kubeadmin -n kube-system >/dev/null 2>&1; then
+      has_breakglass="true"
+    fi
+
+    if [[ "$has_breakglass" == "true" ]] || [[ "${FORCE_AUTH_REMOVAL:-false}" == "true" ]]; then
+      if [[ "$has_breakglass" != "true" ]]; then
+        log_status "running" "uninstalling" "WARNING: kubeadmin is absent but FORCE_AUTH_REMOVAL=true — removing the SSO admin path anyway. Ensure you hold an independent admin kubeconfig."
+      fi
+
+      log_status "running" "uninstalling" "Removing OAuth configuration..."
+      oc delete clusterrolebinding keycloak-cluster-admins 2>/dev/null || true
+      # Remove ONLY the rhbk provider, preserving any other identity providers.
+      oc get oauth cluster -o json 2>/dev/null | \
+        jq 'del(.spec.identityProviders[] | select(.name == "rhbk"))' 2>/dev/null | \
+        oc apply -f - 2>/dev/null || true
+      oc delete secret openid-client-secret -n openshift-config 2>/dev/null || true
+
+      # Remove rhbk identity mappings so a reinstall with new Keycloak UUIDs
+      # won't hit "cannot be claimed by identity" errors
+      local rhbk_identities
+      rhbk_identities=$(oc get identities -o name 2>/dev/null | { grep "rhbk:" || true; })
+      if [[ -n "$rhbk_identities" ]]; then
+        log_status "running" "uninstalling" "Removing stale Keycloak identity mappings..."
+        for identity in $rhbk_identities; do
+          local mapped_user
+          mapped_user=$(oc get "$identity" -o jsonpath='{.user.name}' 2>/dev/null || echo "")
+          oc delete "$identity" 2>/dev/null || true
+          if [[ -n "$mapped_user" ]]; then
+            oc delete user "$mapped_user" 2>/dev/null || true
+          fi
+        done
+      fi
+    else
+      log_status "running" "uninstalling" "SKIPPING auth teardown: kubeadmin is absent, so removing the SSO admin path would lock everyone out of the cluster. The rhbk identity provider, keycloak-cluster-admins binding, and rhbk identities were PRESERVED. Re-run with FORCE_AUTH_REMOVAL=true only if you hold an independent admin credential."
     fi
 
     # Remove telemetry resources
