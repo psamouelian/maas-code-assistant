@@ -18,12 +18,24 @@ check_break_glass() {
     return 0
   fi
 
-  if [[ "${ACKNOWLEDGE_NO_BREAKGLASS:-false}" == "true" ]]; then
-    log_status "running" "validating" "WARNING: kubeadmin is absent, but ACKNOWLEDGE_NO_BREAKGLASS=true was set. Proceeding — ensure you hold an independent admin kubeconfig."
+  # An existing identity provider other than this quickstart's own 'rhbk' (e.g.
+  # Google, htpasswd, LDAP) is an independent login path that this install does
+  # NOT alter — the additive OAuth patch preserves it. If the operator can log
+  # in as cluster-admin through one of these, that is their break-glass.
+  local existing_idps
+  existing_idps=$(oc get oauth cluster -o json 2>/dev/null | \
+    jq -r '[(.spec.identityProviders // [])[] | select(.name != "rhbk") | .name] | join(", ")' 2>/dev/null || echo "")
+  if [[ -n "$existing_idps" ]]; then
+    log_status "running" "validating" "kubeadmin is absent, but an independent identity provider is configured (${existing_idps}). This install preserves it (the OAuth patch is additive). IMPORTANT: verify you can log in as a cluster-admin through it BEFORE continuing — it is your only recovery path if the install is interrupted."
     return 0
   fi
 
-  log_error "kubeadmin is absent and no break-glass was acknowledged. This install modifies cluster-wide authentication; an interruption could permanently lock you out. Retain a working admin kubeconfig and set ACKNOWLEDGE_NO_BREAKGLASS=true to proceed anyway."
+  if [[ "${ACKNOWLEDGE_NO_BREAKGLASS:-false}" == "true" ]]; then
+    log_status "running" "validating" "WARNING: no break-glass credential detected (kubeadmin absent, no independent identity provider), but ACKNOWLEDGE_NO_BREAKGLASS=true was set. Proceeding — ensure you hold an independent admin kubeconfig."
+    return 0
+  fi
+
+  log_error "No break-glass credential detected: kubeadmin is absent and the cluster has no identity provider other than this quickstart's own. This install modifies cluster-wide authentication; an interruption could permanently lock you out. Retain a working admin kubeconfig (or a pre-existing identity provider) and set ACKNOWLEDGE_NO_BREAKGLASS=true to proceed anyway."
 }
 
 deploy_quickstart() {
@@ -132,7 +144,6 @@ gateways:
 
 keycloak:
   enabled: true
-  removeKubeAdmin: ${REMOVE_KUBE_ADMIN:-false}
   clientSecret: ${keycloak_client_secret}
   ingressCA: |
 $(echo "$ingress_ca" | sed 's/^/    /')

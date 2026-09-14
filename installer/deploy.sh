@@ -226,22 +226,13 @@ case "${1:-}" in
     echo ""
     read -rsp "Enter user password (for user1-user5): " USER_PASSWORD
     echo ""
-    read -rn 1 -p "Remove kubeadmin user? [y/N]: " REMOVE_ANSWER
-    echo ""
-
-    REMOVE_KUBE_ADMIN="false"
-    if [[ "$REMOVE_ANSWER" == "y" ]] || [[ "$REMOVE_ANSWER" == "Y" ]]; then
-      REMOVE_KUBE_ADMIN="true"
-    fi
 
     INSTALL_ENV="        - name: INSTALL_MODE
           value: \"demo\"
         - name: ADMIN_PASSWORD
           value: \"${ADMIN_PASSWORD}\"
         - name: USER_PASSWORD
-          value: \"${USER_PASSWORD}\"
-        - name: REMOVE_KUBE_ADMIN
-          value: \"${REMOVE_KUBE_ADMIN}\""
+          value: \"${USER_PASSWORD}\""
 
     # Install refuses to mutate cluster-wide auth when no break-glass admin is
     # found, unless the operator explicitly acknowledges the risk. Pass the

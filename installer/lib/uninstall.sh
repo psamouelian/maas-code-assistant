@@ -69,16 +69,27 @@ cleanup_quickstart() {
     # and the rhbk identities strips the SSO admin login path. If nobody holds an
     # independent admin credential, doing this locks EVERYONE out of the cluster
     # permanently (exactly the failure that motivated these guards). Only tear
-    # down auth when kubeadmin still exists as a fallback, or the operator has
-    # explicitly accepted the risk with FORCE_AUTH_REMOVAL=true.
+    # down auth when a break-glass fallback still exists, or the operator has
+    # explicitly accepted the risk with FORCE_AUTH_REMOVAL=true. A break-glass
+    # is either the kubeadmin secret OR an identity provider other than this
+    # quickstart's own 'rhbk' (e.g. Google, htpasswd, LDAP) — an independent
+    # login path this teardown does not touch.
     local has_breakglass="false"
     if oc get secret kubeadmin -n kube-system >/dev/null 2>&1; then
       has_breakglass="true"
+    else
+      local other_idps
+      other_idps=$(oc get oauth cluster -o json 2>/dev/null | \
+        jq -r '[(.spec.identityProviders // [])[] | select(.name != "rhbk")] | length' 2>/dev/null || echo "0")
+      if [[ "$other_idps" -gt 0 ]]; then
+        has_breakglass="true"
+        log_status "running" "uninstalling" "kubeadmin is absent, but an independent identity provider remains — treating it as break-glass. Only the rhbk provider will be removed."
+      fi
     fi
 
     if [[ "$has_breakglass" == "true" ]] || [[ "${FORCE_AUTH_REMOVAL:-false}" == "true" ]]; then
       if [[ "$has_breakglass" != "true" ]]; then
-        log_status "running" "uninstalling" "WARNING: kubeadmin is absent but FORCE_AUTH_REMOVAL=true — removing the SSO admin path anyway. Ensure you hold an independent admin kubeconfig."
+        log_status "running" "uninstalling" "WARNING: no break-glass detected (kubeadmin absent, no independent identity provider) but FORCE_AUTH_REMOVAL=true — removing the SSO admin path anyway. Ensure you hold an independent admin kubeconfig."
       fi
 
       log_status "running" "uninstalling" "Removing OAuth configuration..."
@@ -105,7 +116,7 @@ cleanup_quickstart() {
         done
       fi
     else
-      log_status "running" "uninstalling" "SKIPPING auth teardown: kubeadmin is absent, so removing the SSO admin path would lock everyone out of the cluster. The rhbk identity provider, keycloak-cluster-admins binding, and rhbk identities were PRESERVED. Re-run with FORCE_AUTH_REMOVAL=true only if you hold an independent admin credential."
+      log_status "running" "uninstalling" "SKIPPING auth teardown: no break-glass detected (kubeadmin is absent and the cluster has no identity provider other than rhbk), so removing the SSO admin path would lock everyone out of the cluster. The rhbk identity provider, keycloak-cluster-admins binding, and rhbk identities were PRESERVED. Re-run with FORCE_AUTH_REMOVAL=true only if you hold an independent admin credential."
     fi
 
     # Remove telemetry resources

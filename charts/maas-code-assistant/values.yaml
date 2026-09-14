@@ -120,7 +120,6 @@ kuadrant:
 keycloak:
   enabled: false
   namespace: keycloak
-  removeKubeAdmin: false
 
 devspaces:
   enabled: false

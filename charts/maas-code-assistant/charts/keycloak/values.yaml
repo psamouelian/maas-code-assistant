@@ -21,8 +21,6 @@ realm:
     count: 5
     password: openshift
 
-removeKubeAdmin: false
-
 oauthPatch:
   namespace: openshift-authentication
 
