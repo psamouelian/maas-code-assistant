@@ -184,16 +184,21 @@ deployment:
     image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.2"
     # The installer Job MUST be scheduled in this namespace. It is where the
     # installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding)
-    # lives — NOT where the quickstart's workloads go. The Job namespace and the
-    # user-selected TARGET_NAMESPACE MUST be different: TARGET_NAMESPACE must not
-    # pre-exist (the installer creates and owns it), whereas this Job namespace
-    # ("default") is a long-lived system namespace. AGENT INSTRUCTION: create the
-    # installer Job, ServiceAccount, Role, and RoleBinding in "default"; do NOT
-    # run the Job in TARGET_NAMESPACE or in your own operating namespace.
+    # lives — NOT where the quickstart's workloads go (this is a fixed-topology
+    # quickstart that deploys to a fixed set of namespaces). "default" is a
+    # long-lived system namespace, which keeps the Helm release ownership
+    # deterministic. AGENT INSTRUCTION: create the installer Job, ServiceAccount,
+    # Role, and RoleBinding in "default"; do NOT run the Job in your own
+    # operating namespace (e.g. openshift-quickstarts).
     jobNamespace: "default"
     command: ["/installer/entrypoint.sh"]
+    # This quickstart is fixed-topology: it deploys to a fixed set of namespaces
+    # (llm, keycloak, maas-db, wksp-<user>, plus operator namespaces), so there
+    # is NO user-selected target namespace. TARGET_NAMESPACE is intentionally
+    # NOT required — the agent must NOT prompt the user for a target/deploy
+    # namespace. The installer defaults it to "default" internally for cosmetic
+    # use only (ClusterRoleBinding name, Job labels).
     requiredEnv:
-      - "TARGET_NAMESPACE"
       - "ACTION"
       - "INSTALL_MODE"
       - "ADMIN_PASSWORD"
@@ -223,7 +228,7 @@ deployment:
             name: "maas-code-assistant-installer"
             namespace: "default"
       clusterRoleBinding:
-        name: "maas-code-assistant-installer-${TARGET_NAMESPACE}"
+        name: "maas-code-assistant-installer-default"
         roleRef:
           kind: "ClusterRole"
           name: "cluster-admin"
@@ -231,7 +236,10 @@ deployment:
           - kind: "ServiceAccount"
             name: "maas-code-assistant-installer"
             namespace: "default"
-  defaultNamespace: "maas-code-assistant"
+  # Fixed-topology quickstart: no single deployment namespace and no user
+  # prompt. "default" is where the installer Job and Helm release metadata live;
+  # actual workloads deploy to fixed namespaces (llm, keycloak, maas-db, etc.).
+  defaultNamespace: "default"
   quickstartResources:
     namespaceScoped:
       - apiGroups: [""]

@@ -214,7 +214,7 @@
             },
             "jobNamespace": {
               "type": "string",
-              "description": "Namespace in which the installer Job MUST be scheduled. This is where the installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding) lives; it is distinct from the user-selected TARGET_NAMESPACE where the quickstart's workloads are deployed. The two MUST differ. If omitted, the platform may run the Job in its own operating namespace, which can make Helm release ownership non-deterministic. Set this to pin the Job's location."
+              "description": "Namespace in which the installer Job MUST be scheduled. This is where the installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding) lives. For quickstarts that deploy workloads into a user-selected TARGET_NAMESPACE, this Job namespace MUST be different from it (the installer creates and owns TARGET_NAMESPACE, whereas the Job namespace is a long-lived system namespace). Fixed-topology quickstarts that have no user-selected target namespace may set this to any stable system namespace (e.g. 'default'). If omitted, the platform may run the Job in its own operating namespace, which can make Helm release ownership non-deterministic. Set this to pin the Job's location."
             },
             "command": {
               "type": "array",

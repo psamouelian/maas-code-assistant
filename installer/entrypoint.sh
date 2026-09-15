@@ -167,7 +167,12 @@ trap cleanup_on_exit EXIT
 # ============================================================================
 
 : "${ACTION:?ACTION must be set (CHECK_PRE_REQS, STATUS, INSTALL, UNINSTALL_DELETE_ALL)}"
-: "${TARGET_NAMESPACE:?TARGET_NAMESPACE must be set}"
+# This quickstart is fixed-topology: its workloads always deploy to a fixed set
+# of namespaces (llm, keycloak, maas-db, wksp-<user>, plus operator namespaces),
+# so there is no user-selected target namespace. TARGET_NAMESPACE is retained
+# only for cosmetic uses (ClusterRoleBinding name, Job labels) and defaults to
+# "default" — the user is not prompted for it.
+: "${TARGET_NAMESPACE:=default}"
 : "${INSTALL_MODE:=demo}"
 
 case "$ACTION" in

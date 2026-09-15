@@ -39,7 +39,9 @@ check_break_glass() {
 }
 
 deploy_quickstart() {
-  local target_ns="${TARGET_NAMESPACE}"
+  # NOTE: This quickstart is fixed-topology — workloads deploy to a fixed set of
+  # namespaces defined in the charts, not to TARGET_NAMESPACE. TARGET_NAMESPACE
+  # is not consumed here on purpose.
 
   # ---- Guard against catastrophic auth lockout before touching the cluster ----
   check_break_glass

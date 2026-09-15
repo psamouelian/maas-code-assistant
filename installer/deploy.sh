@@ -207,19 +207,19 @@ EOF
 
 case "${1:-}" in
   check_pre_reqs)
-    NAMESPACE="${2:-${NAMESPACE:-}}"
+    NAMESPACE="${2:-${NAMESPACE:-default}}"
     [[ -z "$NAMESPACE" ]] && error "Namespace required. Usage: ./deploy.sh check_pre_reqs <namespace>"
     deploy_job "CHECK_PRE_REQS" "$NAMESPACE" ""
     ;;
 
   status)
-    NAMESPACE="${2:-${NAMESPACE:-}}"
+    NAMESPACE="${2:-${NAMESPACE:-default}}"
     [[ -z "$NAMESPACE" ]] && error "Namespace required. Usage: ./deploy.sh status <namespace>"
     deploy_job "STATUS" "$NAMESPACE" ""
     ;;
 
   install)
-    NAMESPACE="${2:-${NAMESPACE:-}}"
+    NAMESPACE="${2:-${NAMESPACE:-default}}"
     [[ -z "$NAMESPACE" ]] && error "Namespace required. Usage: ./deploy.sh install <namespace>"
 
     read -rsp "Enter admin password: " ADMIN_PASSWORD
@@ -247,7 +247,7 @@ case "${1:-}" in
     ;;
 
   uninstall_delete_all)
-    NAMESPACE="${2:-${NAMESPACE:-}}"
+    NAMESPACE="${2:-${NAMESPACE:-default}}"
     [[ -z "$NAMESPACE" ]] && error "Namespace required. Usage: ./deploy.sh uninstall_delete_all <namespace>"
 
     # Uninstall skips tearing down the SSO admin path when kubeadmin is absent
