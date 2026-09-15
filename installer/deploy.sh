@@ -7,7 +7,7 @@ set -euo pipefail
 
 REGISTRY="quay.io/rh-ai-quickstart"
 IMAGE_NAME="maas-code-assistant-installer"
-VERSION="1.0.0"
+VERSION="1.0.1"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 
 RED='\033[0;31m'
