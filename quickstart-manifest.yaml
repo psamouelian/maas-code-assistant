@@ -181,7 +181,7 @@ deployment:
   supportedModes:
     - "DEMO"
   installer:
-    image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.2"
+    image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.3"
     # The installer Job MUST be scheduled in this namespace. It is where the
     # installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding)
     # lives — NOT where the quickstart's workloads go (this is a fixed-topology

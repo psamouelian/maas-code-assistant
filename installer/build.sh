@@ -10,7 +10,7 @@ PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 REGISTRY="quay.io/rh-ai-quickstart"
 IMAGE_NAME="maas-code-assistant-installer"
-VERSION="1.0.2"
+VERSION="1.0.3"
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 
 GREEN='\033[0;32m'
