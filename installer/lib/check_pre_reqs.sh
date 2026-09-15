@@ -61,13 +61,55 @@ check_prerequisites() {
     log_status "running" "validating" "Found ${gpu_node_count} GPU node(s)"
   fi
 
-  # ---- No conflicting operators (check for existing RHOAI) ----
-  log_status "running" "validating" "Checking for conflicting installations..."
-  local existing_rhoai
-  existing_rhoai=$(oc get subscription -A 2>/dev/null | grep "rhods-operator" || echo "")
-  if [[ -n "$existing_rhoai" ]]; then
-    log_status "running" "validating" "Note: Existing Red Hat OpenShift AI installation detected. The installer will manage this."
-  fi
+  # ---- Pre-existing operators: coexist + version compatibility ----
+  # The installer never takes ownership of operators already on the cluster. If
+  # an operator it needs is already installed, it COEXISTS with it — it does not
+  # adopt, reconfigure, or (on uninstall) remove it, so other applications that
+  # depend on that operator are unaffected. If an operator is absent, the
+  # installer installs it. Here we report which operators are already present and
+  # fail the check if a pre-existing one is OLDER than this quickstart requires
+  # (since coexist means we will not upgrade it).
+  log_status "running" "validating" "Checking for pre-existing operators (coexist mode)..."
+  local subs_json csvs_json
+  subs_json=$(oc get subscriptions -A -o json 2>/dev/null || echo '{"items":[]}')
+  csvs_json=$(oc get csv -A -o json 2>/dev/null || echo '{"items":[]}')
+
+  # "subscription-name|minimum-version|display-name" — empty minimum = any version OK.
+  local operator_specs=(
+    "rhods-operator|3.4.0|Red Hat OpenShift AI"
+    "rhcl-operator|1.3.4|Red Hat Connectivity Link"
+    "cluster-observability-operator|1.4.0|Cluster Observability Operator"
+    "rhbk-operator||Red Hat Build of Keycloak"
+    "devspaces||OpenShift Dev Spaces"
+    "openshift-cert-manager-operator||cert-manager Operator"
+    "leader-worker-set||Leader Worker Set Operator"
+    "cloudnative-pg||CloudNativePG"
+    "opentelemetry-product||OpenTelemetry Product"
+  )
+
+  local spec op_name min_ver disp installed_csv installed_ver oldest
+  for spec in "${operator_specs[@]}"; do
+    IFS='|' read -r op_name min_ver disp <<< "$spec"
+
+    installed_csv=$(echo "$subs_json" | \
+      jq -r --arg n "$op_name" '[.items[] | select(.spec.name==$n) | .status.installedCSV] | map(select(. != null and . != "")) | .[0] // ""' 2>/dev/null || echo "")
+    if [[ -z "$installed_csv" ]]; then
+      continue  # not installed — the quickstart will install it
+    fi
+
+    installed_ver=$(echo "$csvs_json" | \
+      jq -r --arg c "$installed_csv" '[.items[] | select(.metadata.name==$c) | .spec.version] | .[0] // ""' 2>/dev/null || echo "")
+
+    if [[ -n "$min_ver" && -n "$installed_ver" ]]; then
+      oldest=$(printf '%s\n%s\n' "$min_ver" "$installed_ver" | sort -V | head -1)
+      if [[ "$oldest" != "$min_ver" ]]; then
+        missing+=("{\"name\":\"${disp}\",\"reason\":\"Pre-existing ${disp} ${installed_ver} is older than the required ${min_ver}. The installer coexists with (does not upgrade) operators already on the cluster. Upgrade it to ${min_ver}+ before installing, or remove it so the installer can install the required version.\"}")
+        continue
+      fi
+    fi
+
+    log_status "running" "validating" "Pre-existing ${disp} detected (${installed_ver:-version unknown}) — the installer will coexist with it and will NOT remove it on uninstall."
+  done
 
   # ---- Cluster-wide authentication impact awareness ----
   # Installation registers a cluster-wide OpenID identity provider and grants the
