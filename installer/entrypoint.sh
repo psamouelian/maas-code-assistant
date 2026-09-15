@@ -209,6 +209,17 @@ case "$ACTION" in
     ;;
 
   INSTALL)
+    # Passwords are supplied as parameters. The manifest declares their env var
+    # names explicitly (ADMIN_PASSWORD, USER_PASSWORD); if a platform build
+    # instead injects the derived "PARAM_"-prefixed names, fall back to those so
+    # the install works either way. Fail fast with a clear message rather than
+    # letting `set -u` abort mid-helm with "unbound variable".
+    ADMIN_PASSWORD="${ADMIN_PASSWORD:-${PARAM_ADMIN_PASSWORD:-}}"
+    USER_PASSWORD="${USER_PASSWORD:-${PARAM_USER_PASSWORD:-}}"
+    if [[ -z "$ADMIN_PASSWORD" || -z "$USER_PASSWORD" ]]; then
+      log_error "ADMIN_PASSWORD and USER_PASSWORD must both be set for INSTALL (accepts the PARAM_-prefixed names as a fallback). Provide the admin.password and user.password parameters."
+    fi
+
     log_status "running" "validating" "Validating prerequisites..."
     check_prerequisites || exit 2
 

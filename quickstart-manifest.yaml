@@ -290,12 +290,21 @@ parameters:
       description: "Password for the admin user account. This user has cluster-admin access."
       type: "password"
       required: true
+      # Declare the env var name explicitly. Without it, the platform derives
+      # "PARAM_" + the uppercased parameter name ("PARAM_ADMIN_PASSWORD"), which
+      # the installer does not read — leaving ADMIN_PASSWORD unset and aborting
+      # the main-chart install under `set -u`.
+      envVar: "ADMIN_PASSWORD"
       llmGuidance: "REQUIRED - Password for the admin account with cluster-admin privileges. Must be secure. Always ask the user to provide this — never auto-generate or use a default value."
     - name: "user.password"
       displayName: "User Password"
       description: "Password for the demo users (user1 through user5). All demo users share this password."
       type: "password"
       required: true
+      # Declare the env var name explicitly (see admin.password above) so the
+      # platform injects USER_PASSWORD rather than the derived
+      # PARAM_USER_PASSWORD, which the installer does not read.
+      envVar: "USER_PASSWORD"
       llmGuidance: "REQUIRED - Shared password for the 5 demo user accounts (user1-user5). Must be secure. Always ask the user to provide this."
   configuration:
     - name: "acknowledge.noBreakGlass"
