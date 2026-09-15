@@ -194,28 +194,30 @@ GPUTOLS
   fi
 
   # ---- Disable already-installed operators (coexist) ----
-  # Coexist with any operator already installed on the cluster: if a Subscription
-  # for it reports an installedCSV (regardless of who created the Subscription),
-  # we do NOT install, manage, upgrade, or approve install plans for it. We leave
-  # it untouched so other applications that depend on it are unaffected and a
-  # later uninstall never removes it. Only operators that are NOT already
-  # installed are installed by this chart.
+  # Coexist with any operator already installed on the cluster: we do NOT install,
+  # manage, upgrade, or approve install plans for it. We leave it untouched so
+  # other applications that depend on it are unaffected and a later uninstall
+  # never removes it. Only operators that are NOT already installed get installed.
   #
-  # The criterion here (presence of installedCSV) is deliberately identical to
-  # the one the prerequisites check uses, so the two never disagree. An earlier
-  # version keyed off Helm ownership annotations and kept self-installed
-  # operators "enabled" to upgrade them on re-run. That disagreed with the
-  # presence-based prereq check and, for a Manual-approval operator already
-  # stepping through versions (e.g. rhods-operator advancing 3.4.2 -> 3.4.3), it
-  # left the approve-plan post-upgrade hook waiting forever for an install plan
-  # matching a resolved CSV the operator was never heading to (3.4.4) — hanging
-  # the whole install until Helm's hook timeout fired.
-  log_status "running" "deploying" "Checking for existing operators..."
-  local existing_operators
-  existing_operators=$(oc get subscriptions -A -o json 2>/dev/null | \
-    jq -r '.items[] | select(.status.installedCSV != null and .status.installedCSV != "") | .spec.name' 2>/dev/null | sort -u || echo "")
+  # We do NOT re-detect the installed set here. check_prerequisites() already
+  # performs this exact detection and publishes it as COEXISTING_OPERATORS, and
+  # INSTALL always runs check_prerequisites() before deploy_quickstart() (see
+  # entrypoint.sh) — so the set is available even when the user skips the
+  # standalone CHECK_PRE_REQS action and goes straight to INSTALL. Reusing that
+  # single detection is what keeps the disable step and the prereq report from
+  # ever disagreeing. (A previous version ran its own second `oc get
+  # subscriptions -A` query here; in a failed run that duplicate query returned
+  # an empty set while check_prerequisites had correctly detected every operator,
+  # so nothing was disabled and the install hung running approve-plan hooks
+  # against Manual operators this quickstart does not own.)
+  if [[ "${COEXIST_DETECTED:-false}" != "true" ]]; then
+    log_error "Internal error: the coexistence set was not computed before install (check_prerequisites must run first). Refusing to proceed, since enabling every operator could hang the install approving plans for operators this quickstart does not own."
+  fi
 
-  for operator in $existing_operators; do
+  log_status "running" "deploying" "Applying coexistence for ${#COEXISTING_OPERATORS[@]} pre-existing operator(s)..."
+  local operator
+  for operator in "${COEXISTING_OPERATORS[@]:-}"; do
+    [[ -z "$operator" ]] && continue
     if grep -q "^[[:space:]]*${operator}:" /tmp/environment.yaml 2>/dev/null; then
       log_status "running" "deploying" "Coexisting with pre-existing operator (leaving it untouched): ${operator}"
       sed -i "/^[[:space:]]*${operator}:/{n; s/enabled: true/enabled: false/;}" /tmp/environment.yaml 2>/dev/null || true

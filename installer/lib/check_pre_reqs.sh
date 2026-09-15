@@ -70,6 +70,15 @@ check_prerequisites() {
   # fail the check if a pre-existing one is OLDER than this quickstart requires
   # (since coexist means we will not upgrade it).
   log_status "running" "validating" "Checking for pre-existing operators (coexist mode)..."
+  # Publish the detected set as globals so deploy_quickstart() can reuse it
+  # WITHOUT re-querying the cluster. INSTALL always runs this function before
+  # deploy_quickstart() (see entrypoint.sh), so these are populated even when the
+  # user skips the standalone CHECK_PRE_REQS action. COEXIST_DETECTED lets the
+  # consumer prove detection actually ran rather than defaulting to "none".
+  # (Deliberately NOT declared 'local' — they must outlive this function.)
+  COEXISTING_OPERATORS=()
+  COEXIST_DETECTED=true
+
   local subs_json csvs_json
   subs_json=$(oc get subscriptions -A -o json 2>/dev/null || echo '{"items":[]}')
   csvs_json=$(oc get csv -A -o json 2>/dev/null || echo '{"items":[]}')
@@ -96,6 +105,10 @@ check_prerequisites() {
     if [[ -z "$installed_csv" ]]; then
       continue  # not installed — the quickstart will install it
     fi
+
+    # Installed — record it so the install step disables it (coexist). Recording
+    # here (rather than re-querying later) is what keeps the two steps in sync.
+    COEXISTING_OPERATORS+=("$op_name")
 
     installed_ver=$(echo "$csvs_json" | \
       jq -r --arg c "$installed_csv" '[.items[] | select(.metadata.name==$c) | .spec.version] | .[0] // ""' 2>/dev/null || echo "")
