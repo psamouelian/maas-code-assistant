@@ -193,18 +193,31 @@ hardwareProfiles:
 GPUTOLS
   fi
 
-  # ---- Disable already-installed operators ----
-  # Only disable operators whose subscriptions are NOT managed by our Helm release.
-  # Subscriptions from a previous dependency-operators install have Helm ownership
-  # labels and must stay enabled so the chart can update them on upgrade.
+  # ---- Disable already-installed operators (coexist) ----
+  # Coexist with any operator already installed on the cluster: if a Subscription
+  # for it reports an installedCSV (regardless of who created the Subscription),
+  # we do NOT install, manage, upgrade, or approve install plans for it. We leave
+  # it untouched so other applications that depend on it are unaffected and a
+  # later uninstall never removes it. Only operators that are NOT already
+  # installed are installed by this chart.
+  #
+  # The criterion here (presence of installedCSV) is deliberately identical to
+  # the one the prerequisites check uses, so the two never disagree. An earlier
+  # version keyed off Helm ownership annotations and kept self-installed
+  # operators "enabled" to upgrade them on re-run. That disagreed with the
+  # presence-based prereq check and, for a Manual-approval operator already
+  # stepping through versions (e.g. rhods-operator advancing 3.4.2 -> 3.4.3), it
+  # left the approve-plan post-upgrade hook waiting forever for an install plan
+  # matching a resolved CSV the operator was never heading to (3.4.4) — hanging
+  # the whole install until Helm's hook timeout fired.
   log_status "running" "deploying" "Checking for existing operators..."
   local existing_operators
   existing_operators=$(oc get subscriptions -A -o json 2>/dev/null | \
-    jq -r '.items[] | select(.metadata.annotations["meta.helm.sh/release-name"] != "dependency-operators") | .spec.name' 2>/dev/null || echo "")
+    jq -r '.items[] | select(.status.installedCSV != null and .status.installedCSV != "") | .spec.name' 2>/dev/null | sort -u || echo "")
 
   for operator in $existing_operators; do
     if grep -q "^[[:space:]]*${operator}:" /tmp/environment.yaml 2>/dev/null; then
-      log_status "running" "deploying" "Disabling pre-existing operator: ${operator}"
+      log_status "running" "deploying" "Coexisting with pre-existing operator (leaving it untouched): ${operator}"
       sed -i "/^[[:space:]]*${operator}:/{n; s/enabled: true/enabled: false/;}" /tmp/environment.yaml 2>/dev/null || true
     fi
   done
