@@ -181,7 +181,7 @@ deployment:
   supportedModes:
     - "DEMO"
   installer:
-    image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.1"
+    image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.2"
     command: ["/installer/entrypoint.sh"]
     requiredEnv:
       - "TARGET_NAMESPACE"

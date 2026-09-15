@@ -308,15 +308,31 @@ GPUTOLS
   done
 
   # ---- Install dependency operators ----
+  # Pin the release to the "default" namespace. Without an explicit -n, Helm uses
+  # the namespace the installer Job runs in (e.g. "default" for local dev via
+  # deploy.sh, but "openshift-quickstarts" when driven by the platform). That
+  # made the release namespace non-deterministic, so adopted resources annotated
+  # with release-namespace=default collided with a release Helm thought lived
+  # elsewhere ("invalid ownership metadata"). Everything else in this quickstart
+  # (main chart, adoption annotations, uninstall, oauthPatch) is pinned to
+  # "default", so pin this too for a single, consistent release namespace.
   log_status "running" "deploying" "Installing dependency operators (this may take several minutes)..."
-  helm upgrade --install --timeout 15m0s \
+  helm upgrade --install -n default --timeout 15m0s \
     dependency-operators /installer/charts/dependency-operators \
     -f /tmp/environment.yaml ${csv_overrides}
 
   log_status "running" "deploying" "Waiting for DataScienceCluster to be ready..."
-  oc wait --for=condition=Ready datasciencecluster default-dsc --timeout 15m0s 2>/dev/null || {
-    log_status "running" "deploying" "DataScienceCluster not yet ready, continuing..."
-  }
+  # The DSC may be the one we created (default-dsc) or a pre-existing one we
+  # coexist with under a different name — wait on whichever actually exists.
+  local dsc_name
+  dsc_name=$(oc get datasciencecluster -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+  if [[ -n "$dsc_name" ]]; then
+    oc wait --for=condition=Ready "datasciencecluster/${dsc_name}" --timeout 15m0s 2>/dev/null || {
+      log_status "running" "deploying" "DataScienceCluster ${dsc_name} not yet ready, continuing..."
+    }
+  else
+    log_status "running" "deploying" "No DataScienceCluster found yet, continuing..."
+  fi
 
   # ---- Install main chart ----
   log_status "running" "deploying" "Installing MaaS Code Assistant chart..."
