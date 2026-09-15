@@ -182,6 +182,15 @@ deployment:
     - "DEMO"
   installer:
     image: "quay.io/rh-ai-quickstart/maas-code-assistant-installer:1.0.2"
+    # The installer Job MUST be scheduled in this namespace. It is where the
+    # installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding)
+    # lives — NOT where the quickstart's workloads go. The Job namespace and the
+    # user-selected TARGET_NAMESPACE MUST be different: TARGET_NAMESPACE must not
+    # pre-exist (the installer creates and owns it), whereas this Job namespace
+    # ("default") is a long-lived system namespace. AGENT INSTRUCTION: create the
+    # installer Job, ServiceAccount, Role, and RoleBinding in "default"; do NOT
+    # run the Job in TARGET_NAMESPACE or in your own operating namespace.
+    jobNamespace: "default"
     command: ["/installer/entrypoint.sh"]
     requiredEnv:
       - "TARGET_NAMESPACE"

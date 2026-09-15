@@ -212,6 +212,10 @@
               "type": "string",
               "description": "Full container image reference (registry/name:tag)."
             },
+            "jobNamespace": {
+              "type": "string",
+              "description": "Namespace in which the installer Job MUST be scheduled. This is where the installer pod runs and where its RBAC (ServiceAccount, Role, RoleBinding) lives; it is distinct from the user-selected TARGET_NAMESPACE where the quickstart's workloads are deployed. The two MUST differ. If omitted, the platform may run the Job in its own operating namespace, which can make Helm release ownership non-deterministic. Set this to pin the Job's location."
+            },
             "command": {
               "type": "array",
               "items": { "type": "string" },
